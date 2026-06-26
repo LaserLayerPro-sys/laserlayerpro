@@ -14,12 +14,13 @@
             text-align: center;
         }
         .container { max-width: 500px; margin: 0 auto; }
-        h1 { color: #00adb5; font-size: 26px; margin-bottom: 5px; }
+        h1 { color: #00adb5; font-size: 26px; margin-bottom: 5px; font-weight: 800; }
         p { color: #aaaaaa; font-size: 13px; margin-top: 0; margin-bottom: 20px; }
         .box {
             background-color: #1e1e1e;
             padding: 20px;
             border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             margin-bottom: 15px;
             border: 1px solid #2d2d2d;
             text-align: left;
@@ -52,8 +53,17 @@
             font-size: 14px;
             outline: none;
         }
-        input[type="range"] { width: 100%; accent-color: #00adb5; }
-        .toggle-group { display: flex; justify-content: space-between; align-items: center; background: #252525; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px; }
+        input[type="range"] { width: 100%; accent-color: #00adb5; background: #333; height: 6px; border-radius: 3px; }
+        .toggle-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #252525;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .toggle-group span { font-size: 14px; color: #eee; }
         .layer-card {
             background: #1e1e1e;
             border: 1px solid #00adb5;
@@ -68,6 +78,7 @@
             background: #2d2d2d;
             border-radius: 8px;
             margin: 10px 0;
+            border: 1px dashed #444;
         }
         #preview-wrapper {
             background-color: #2d2d2d;
@@ -141,7 +152,7 @@
         </div>
 
         <button class="btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
-        <button class="btn-danger" id="reset-btn">🗑️ Limpiar Todo</button>
+        <button class="btn btn-danger" id="reset-btn" style="width:100%;">🗑️ Limpiar Todo</button>
     </div>
 
     <div id="layers-container"></div>
@@ -180,7 +191,7 @@
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
     thresholdSlider.addEventListener('input', () => { thresholdVal.textContent = thresholdSlider.value; });
 
-    // ENLACE EXTRACTOR CORREGIDO MATEMÁTICAMENTE ([0] e indexación de archivos reales)
+    // EL CAMBIO CLAVE: Lector síncrono nativo reparado apuntando al archivo [0]
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             const reader = new FileReader();
@@ -248,11 +259,3 @@
             const layerData = layerImgData.data;
 
             for (let y = 0; y < h; y++) {
-                for (let x = 0; x < w; x++) {
-                    const idx = y * w + x;
-                    const i = idx * 4;
-                    let isTarget = false;
-
-                    if (extractContours) {
-                        if (mask[idx] === 1) {
-                            const left = x > 0 ? mask[idx - 1] : 1;
