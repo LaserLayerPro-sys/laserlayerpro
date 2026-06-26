@@ -160,7 +160,11 @@
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
+                // Forzamos el modo anónimo para evitar bloqueos CORS locales en Android
+                originalImage = new Image();
+                originalImage.crossOrigin = "anonymous";
                 originalImage.src = event.target.result;
+                
                 originalImage.onload = () => {
                     originalPreview.src = originalImage.src;
                     originalPreview.style.display = 'inline-block';
@@ -193,15 +197,30 @@
         
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = originalImage.width;
-        canvas.height = originalImage.height;
-        ctx.drawImage(originalImage, 0, 0);
         
-        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        // Ajuste automático de resolución óptima para evitar colapsos de memoria en Webview
+        const MAX_WIDTH = 1000;
+        let width = originalImage.width;
+        let height = originalImage.height;
+        
+        if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(originalImage, 0, 0, width, height);
+        
+        let imgData;
+        try {
+            imgData = ctx.getImageData(0, 0, width, height);
+        } catch (e) {
+            alert("Error de seguridad al leer la imagen. Intenta con otra o reinicia la app.");
+            return;
+        }
+        
         const data = imgData.data;
-        const width = canvas.width;
-        const height = canvas.height;
-
         const step = 255 / numLayers;
 
         for (let l = 0; l < numLayers; l++) {
@@ -215,7 +234,6 @@
             const minGray = l * step;
             const maxGray = (l + 1) * step;
 
-            // Arreglo temporal para marcar qué píxeles pertenecen a esta capa (para contornos)
             const mask = new Uint8Array(width * height);
 
             for (let i = 0; i < data.length; i += 4) {
@@ -226,11 +244,10 @@
                 const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
 
                 if (gray >= minGray && gray < maxGray) {
-                    mask[idx] = 1; // Pertenece a la capa
+                    mask[idx] = 1;
                 }
             }
 
-            // Renderizar la capa aplicando filtros
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < width; x++) {
                     const idx = y * width + x;
@@ -239,20 +256,9 @@
                     let isTarget = false;
 
                     if (extractContours) {
-                        // Algoritmo de detección de bordes básico (Sobel simplificado en vecindad)
                         if (mask[idx] === 1) {
                             const left = x > 0 ? mask[idx - 1] : 1;
                             const right = x < width - 1 ? mask[idx + 1] : 1;
                             const up = y > 0 ? mask[idx - width] : 1;
                             const down = y < height - 1 ? mask[idx + width] : 1;
 
-                            if (left === 0 || right === 0 || up === 0 || down === 0) {
-                                isTarget = true; // Es borde
-                            }
-                        }
-                    } else {
-                        if (mask[idx] === 1) isTarget = true;
-                    }
-
-                    if (isTarget) {
-                        const colorValue = invert ? 255 : 0;
