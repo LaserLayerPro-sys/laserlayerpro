@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LaserLayer Pro Splitter</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 15px;
+            text-align: center;
+        }
+        .container { max-width: 500px; margin: 0 auto; }
+        h1 { color: #00adb5; font-size: 26px; margin-bottom: 5px; font-weight: 800; }
+        p { color: #aaaaaa; font-size: 13px; margin-top: 0; margin-bottom: 20px; }
+        .box {
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            margin-bottom: 15px;
+            border: 1px solid #2d2d2d;
+        }
+        input[type="file"] { display: none; }
+        .btn {
+            background-color: #00adb5;
+            color: white;
+            padding: 14px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            display: inline-block;
+            font-weight: bold;
+            border: none;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 15px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background-color: #008c95; }
+        .btn-secondary {
+            background-color: #222831;
+            border: 1px solid #393e46;
+            margin-top: 10px;
+        }
+        .btn-danger {
+            background-color: #cf6679;
+            color: #121212;
+            margin-top: 10px;
+        }
+        .control-group {
+            margin: 18px 0;
+            text-align: left;
+        }
+        label { display: block; font-size: 14px; color: #00adb5; margin-bottom: 8px; font-weight: 600; }
+        .toggle-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #252525;
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .toggle-group span { font-size: 14px; color: #eee; }
+        input[type="range"] { width: 100%; accent-color: #00adb5; background: #333; height: 6px; border-radius: 3px; }
+        .layer-card {
+            background: #1e1e1e;
+            border: 1px solid #00adb5;
+            border-radius: 14px;
+            padding: 15px;
+            margin-top: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .layer-card h3 { font-size: 16px; margin: 0 0 10px 0; color: #eeeeee; }
+        .layer-card canvas {
+            max-width: 100%;
+            height: auto;
+            background: #2d2d2d;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px dashed #444;
+        }
+        .download-btn {
+            background-color: #00adb5;
+            color: #121212;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            display: block;
+            text-decoration: none;
+            font-size: 14px;
+        }
+        #original-preview { max-width: 100%; max-height: 180px; display: none; border-radius: 8px; margin-top: 15px; }
+        .checkbox-apple { WebkitAppearance: none; width: 40px; height: 20px; background: #555; border-radius: 20px; position: relative; cursor: pointer; outline: none; transition: background 0.3s; }
+        .checkbox-apple:checked { background: #00adb5; }
+        .checkbox-apple:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 2px; left: 2px; background: #fff; transition: left 0.3s; }
+        .checkbox-apple:checked:before { left: 22px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>LaserLayer Pro</h1>
+    <p>Preparación avanzada de imágenes para corte y grabado láser</p>
+
+    <div class="box">
+        <label class="btn" style="width:auto; display:inline-block;">
+            📁 Cargar Imagen de Origen
+            <input type="file" id="image-input" accept="image/*">
+        </label>
+        <br>
+        <img id="original-preview" alt="Vista previa original">
+    </div>
+
+    <div class="box" id="controls" style="display:none;">
+        <div class="control-group">
+            <label for="layers-count">Modo Capas Automáticas: <span id="layers-val">3</span> capas</label>
+            <input type="range" id="layers-count" min="2" max="6" value="3">
+        </div>
+
+        <div class="toggle-group">
+            <span>Invertir Colores (Modo Negativo)</span>
+            <input type="checkbox" id="invert-toggle" class="checkbox-apple">
+        </div>
+
+        <div class="toggle-group">
+            <span>Extraer solo Contornos (Línea de Corte)</span>
+            <input type="checkbox" id="contour-toggle" class="checkbox-apple">
+        </div>
+
+        <button class="btn btn-secondary" id="process-btn">⚙️ Procesar y Separar</button>
+        <button class="btn btn-danger" id="reset-btn">🗑️ Limpiar Todo</button>
+    </div>
+
+    <div id="layers-container"></div>
+</div>
+
+<script>
+    const imageInput = document.getElementById('image-input');
+    const originalPreview = document.getElementById('original-preview');
+    const controls = document.getElementById('controls');
+    const layersCount = document.getElementById('layers-count');
+    const layersVal = document.getElementById('layers-val');
+    const processBtn = document.getElementById('process-btn');
+    const resetBtn = document.getElementById('reset-btn');
+    const layersContainer = document.getElementById('layers-container');
+    const invertToggle = document.getElementById('invert-toggle');
+    const contourToggle = document.getElementById('contour-toggle');
+
+    let originalImage = new Image();
+
+    layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
+
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                originalImage.src = event.target.result;
+                originalImage.onload = () => {
+                    originalPreview.src = originalImage.src;
+                    originalPreview.style.display = 'inline-block';
+                    controls.style.display = 'block';
+                    layersContainer.innerHTML = '';
+                };
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+
+    resetBtn.addEventListener('click', () => {
+        imageInput.value = '';
+        originalPreview.style.display = 'none';
+        originalPreview.src = '';
+        controls.style.display = 'none';
+        layersContainer.innerHTML = '';
+        originalImage = new Image();
+        invertToggle.checked = false;
+        contourToggle.checked = false;
+    });
+
+    processBtn.addEventListener('click', () => {
+        if (!originalImage.src) return;
+        
+        layersContainer.innerHTML = '';
+        const numLayers = parseInt(layersCount.value);
+        const invert = invertToggle.checked;
+        const extractContours = contourToggle.checked;
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = originalImage.width;
+        canvas.height = originalImage.height;
+        ctx.drawImage(originalImage, 0, 0);
+        
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imgData.data;
+        const width = canvas.width;
+        const height = canvas.height;
+
+        const step = 255 / numLayers;
+
+        for (let l = 0; l < numLayers; l++) {
+            const layerCanvas = document.createElement('canvas');
+            layerCanvas.width = width;
+            layerCanvas.height = height;
+            const layerCtx = layerCanvas.getContext('2d');
+            const layerImgData = layerCtx.createImageData(width, height);
+            const layerData = layerImgData.data;
+
+            const minGray = l * step;
+            const maxGray = (l + 1) * step;
+
+            // Arreglo temporal para marcar qué píxeles pertenecen a esta capa (para contornos)
+            const mask = new Uint8Array(width * height);
+
+            for (let i = 0; i < data.length; i += 4) {
+                const idx = i / 4;
+                const a = data[i+3];
+                if (a < 10) continue;
+
+                const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+
+                if (gray >= minGray && gray < maxGray) {
+                    mask[idx] = 1; // Pertenece a la capa
+                }
+            }
+
+            // Renderizar la capa aplicando filtros
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    const i = idx * 4;
+
+                    let isTarget = false;
+
+                    if (extractContours) {
+                        // Algoritmo de detección de bordes básico (Sobel simplificado en vecindad)
+                        if (mask[idx] === 1) {
+                            const left = x > 0 ? mask[idx - 1] : 1;
+                            const right = x < width - 1 ? mask[idx + 1] : 1;
+                            const up = y > 0 ? mask[idx - width] : 1;
+                            const down = y < height - 1 ? mask[idx + width] : 1;
+
+                            if (left === 0 || right === 0 || up === 0 || down === 0) {
+                                isTarget = true; // Es borde
+                            }
+                        }
+                    } else {
+                        if (mask[idx] === 1) isTarget = true;
+                    }
+
+                    if (isTarget) {
+                        const colorValue = invert ? 255 : 0;
