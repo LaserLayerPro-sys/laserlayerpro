@@ -38,7 +38,7 @@
             font-size: 15px;
         }
         .btn-secondary { background-color: #222831; border: 1px solid #393e46; margin-top: 10px; width: 100%; padding: 14px; border-radius: 10px; color: white; font-weight: bold; font-size: 15px; cursor: pointer; }
-        .btn-danger { background-color: #cf6679; color: #121212; margin-top: 10px; }
+        .btn-danger { background-color: #cf6679; color: #121212; margin-top: 10px; width: 100%; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .control-group { margin: 18px 0; text-align: left; }
         label { display: block; font-size: 14px; color: #00adb5; margin-bottom: 8px; font-weight: 600; }
         .toggle-group {
@@ -105,6 +105,11 @@
         </div>
 
         <div class="control-group">
+            <label for="tolerance-slider">Tolerancia de umbral: <span id="tolerance-val">0</span></label>
+            <input type="range" id="tolerance-slider" min="-50" max="50" value="0">
+        </div>
+
+        <div class="control-group">
             <label for="format-select">Formato de descarga final:</label>
             <select id="format-select">
                 <option value="image/png">PNG (Fondo Transparente - Recomendado)</option>
@@ -123,7 +128,7 @@
         </div>
 
         <button class="btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
-        <button class="btn btn-danger" id="reset-btn" style="width:100%;">🗑️ Limpiar Todo</button>
+        <button class="btn btn-danger" id="reset-btn">🗑️ Limpiar Todo</button>
     </div>
 
     <div id="layers-container"></div>
@@ -135,6 +140,8 @@
     const originalCtx = originalCanvas.getContext('2d');
     const layersCount = document.getElementById('layers-count');
     const layersVal = document.getElementById('layers-val');
+    const toleranceSlider = document.getElementById('tolerance-slider');
+    const toleranceVal = document.getElementById('tolerance-val');
     const processBtn = document.getElementById('process-btn');
     const resetBtn = document.getElementById('reset-btn');
     const layersContainer = document.getElementById('layers-container');
@@ -158,8 +165,9 @@
     initCanvas();
 
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
+    toleranceSlider.addEventListener('input', () => { toleranceVal.textContent = toleranceSlider.value; });
 
-    // Selector corregido y optimizado para evitar atascos en navegadores móviles y de PC
+    // LECTURA DIRECTA CORREGIDA (Se añade el [0] que faltaba para leer el archivo real)
     imageInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
             const selectedFile = e.target.files[0];
@@ -178,7 +186,6 @@
                     originalCanvas.width = w;
                     originalCanvas.height = h;
                     
-                    // Asegurar fondo sólido para evitar conflictos de transparencia con Photoroom
                     originalCtx.fillStyle = "#ffffff";
                     originalCtx.fillRect(0, 0, w, h);
                     originalCtx.drawImage(backupImg, 0, 0, w, h);
@@ -196,6 +203,8 @@
         layersContainer.innerHTML = '';
         invertToggle.checked = false;
         contourToggle.checked = false;
+        toleranceSlider.value = 0;
+        toleranceVal.textContent = "0";
         imageLoaded = false;
     });
 
@@ -207,6 +216,7 @@
         
         layersContainer.innerHTML = '';
         const numLayers = parseInt(layersCount.value);
+        const tolerance = parseInt(toleranceSlider.value);
         const invert = invertToggle.checked;
         const extractContours = contourToggle.checked;
         const chosenFormat = formatSelect.value;
@@ -226,26 +236,8 @@
             const layerImgData = layerCtx.createImageData(width, height);
             const layerData = layerImgData.data;
 
-            const minGray = l * step;
-            const maxGray = (l + 1) * step;
+            const minGray = (l * step) + tolerance;
+            const maxGray = ((l + 1) * step) + tolerance;
             const mask = new Uint8Array(width * height);
 
             for (let i = 0; i < data.length; i += 4) {
-                const idx = i / 4;
-                const alpha = data[i+3];
-                
-                let r = data[i];
-                let g = data[i+1];
-                let b = data[i+2];
-                if (alpha < 10) { r = 255; g = 255; b = 255; }
-
-                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-                if (gray >= minGray && gray < maxGray) {
-                    mask[idx] = 1;
-                }
-            }
-
-            for (let y = 0; y < height; y++) {
-                for (let x = 0; x < width; x++) {
-                    const idx = y * width + x;
-                    const i = idx * 4;
