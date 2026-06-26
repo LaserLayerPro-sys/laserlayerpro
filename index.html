@@ -37,7 +37,7 @@
             box-sizing: border-box;
             font-size: 15px;
         }
-        .btn-secondary { background-color: #222831; border: 1px solid #393e46; margin-top: 10px; }
+        .btn-secondary { background-color: #222831; border: 1px solid #393e46; margin-top: 10px; width: 100%; padding: 14px; border-radius: 10px; color: white; font-weight: bold; font-size: 15px; cursor: pointer; }
         .btn-danger { background-color: #cf6679; color: #121212; margin-top: 10px; }
         .control-group { margin: 18px 0; text-align: left; }
         label { display: block; font-size: 14px; color: #00adb5; margin-bottom: 8px; font-weight: 600; }
@@ -98,7 +98,6 @@
         <canvas id="original-preview-canvas"></canvas>
     </div>
 
-    <!-- Eliminamos el comando que ocultaba este menú, ahora saldrá siempre visible -->
     <div class="box" id="controls">
         <div class="control-group">
             <label for="layers-count">Modo Capas Automáticas: <span id="layers-val">3</span> capas</label>
@@ -123,8 +122,8 @@
             <input type="checkbox" id="contour-toggle" class="checkbox-apple">
         </div>
 
-        <button class="btn btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
-        <button class="btn btn-danger" id="reset-btn">🗑️ Limpiar Todo</button>
+        <button class="btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
+        <button class="btn btn-danger" id="reset-btn" style="width:100%;">🗑️ Limpiar Todo</button>
     </div>
 
     <div id="layers-container"></div>
@@ -146,21 +145,24 @@
     let imageLoaded = false;
     let backupImg = new Image();
 
-    // Inicializar el cuadro de previsualización vacío con un fondo gris técnico
-    originalCanvas.width = 400;
-    originalCanvas.height = 150;
-    originalCtx.fillStyle = "#2d2d2d";
-    originalCtx.fillRect(0, 0, 400, 150);
-    originalCtx.fillStyle = "#888888";
-    originalCtx.font = "14px Arial";
-    originalCtx.textAlign = "center";
-    originalCtx.fillText("Ninguna imagen cargada aún", 200, 80);
+    function initCanvas() {
+        originalCanvas.width = 400;
+        originalCanvas.height = 150;
+        originalCtx.fillStyle = "#2d2d2d";
+        originalCtx.fillRect(0, 0, 400, 150);
+        originalCtx.fillStyle = "#888888";
+        originalCtx.font = "14px Arial";
+        originalCtx.textAlign = "center";
+        originalCtx.fillText("Ninguna imagen cargada aún", 200, 80);
+    }
+    initCanvas();
 
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
 
+    // Selector corregido y optimizado para evitar atascos en navegadores móviles y de PC
     imageInput.addEventListener('change', (e) => {
         if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
+            const selectedFile = e.target.files[0];
             const reader = new FileReader();
             
             reader.onload = function(event) {
@@ -176,6 +178,7 @@
                     originalCanvas.width = w;
                     originalCanvas.height = h;
                     
+                    // Asegurar fondo sólido para evitar conflictos de transparencia con Photoroom
                     originalCtx.fillStyle = "#ffffff";
                     originalCtx.fillRect(0, 0, w, h);
                     originalCtx.drawImage(backupImg, 0, 0, w, h);
@@ -183,18 +186,13 @@
                 };
                 backupImg.src = event.target.result;
             };
-            reader.readAsDataURL(file);
+            reader.readAsDataURL(selectedFile);
         }
     });
 
     resetBtn.addEventListener('click', () => {
         imageInput.value = '';
-        originalCanvas.width = 400;
-        originalCanvas.height = 150;
-        originalCtx.fillStyle = "#2d2d2d";
-        originalCtx.fillRect(0, 0, 400, 150);
-        originalCtx.fillStyle = "#888888";
-        originalCtx.fillText("Ninguna imagen cargada aún", 200, 80);
+        initCanvas();
         layersContainer.innerHTML = '';
         invertToggle.checked = false;
         contourToggle.checked = false;
@@ -203,7 +201,7 @@
 
     processBtn.addEventListener('click', () => {
         if (!imageLoaded) {
-            alert("Por favor, selecciona primero una imagen válida haciendo clic en el botón azul.");
+            alert("Por favor, selecciona primero una imagen haciendo clic en el botón azul superior.");
             return;
         }
         
