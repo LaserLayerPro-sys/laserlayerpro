@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LaserLayer Pro v3</title>
+    <title>LaserLayer Pro v5</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+            font-family: Arial, sans-serif;
             background-color: #121212;
             color: #ffffff;
             margin: 0;
@@ -14,13 +14,12 @@
             text-align: center;
         }
         .container { max-width: 500px; margin: 0 auto; }
-        h1 { color: #00adb5; font-size: 26px; margin-bottom: 5px; font-weight: 800; }
+        h1 { color: #00adb5; font-size: 26px; margin-bottom: 5px; }
         p { color: #aaaaaa; font-size: 13px; margin-top: 0; margin-bottom: 20px; }
         .box {
             background-color: #1e1e1e;
             padding: 20px;
             border-radius: 16px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             margin-bottom: 15px;
             border: 1px solid #2d2d2d;
             text-align: left;
@@ -39,7 +38,6 @@
             font-size: 15px;
             text-align: center;
         }
-        .btn-blue:hover { background-color: #008c95; }
         .btn-secondary { background-color: #222831; border: 1px solid #393e46; margin-top: 15px; width: 100%; padding: 14px; border-radius: 10px; color: white; font-weight: bold; font-size: 15px; cursor: pointer; }
         .btn-danger { background-color: #cf6679; color: #121212; margin-top: 10px; width: 100%; padding: 12px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .control-group { margin: 18px 0; }
@@ -54,17 +52,8 @@
             font-size: 14px;
             outline: none;
         }
-        input[type="range"] { width: 100%; accent-color: #00adb5; background: #333; height: 6px; border-radius: 3px; }
-        .toggle-group {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            background: #252525;
-            padding: 12px 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-        }
-        .toggle-group span { font-size: 14px; color: #eee; }
+        input[type="range"] { width: 100%; accent-color: #00adb5; }
+        .toggle-group { display: flex; justify-content: space-between; align-items: center; background: #252525; padding: 12px 15px; border-radius: 8px; margin-bottom: 10px; }
         .layer-card {
             background: #1e1e1e;
             border: 1px solid #00adb5;
@@ -79,13 +68,22 @@
             background: #2d2d2d;
             border-radius: 8px;
             margin: 10px 0;
-            border: 1px dashed #444;
         }
-        #original-preview-canvas { max-width: 100%; height: auto; border-radius: 8px; margin-top: 15px; background: #2d2d2d; display: block; width: 100%; }
-        .checkbox-switch { WebkitAppearance: none; width: 40px; height: 20px; background: #555; border-radius: 20px; position: relative; cursor: pointer; outline: none; }
-        .checkbox-switch:checked { background: #00adb5; }
-        .checkbox-switch:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 2px; left: 2px; background: #fff; }
-        .checkbox-switch:checked:before { left: 22px; }
+        #preview-wrapper {
+            background-color: #2d2d2d;
+            border-radius: 8px;
+            margin-top: 15px;
+            padding: 10px;
+            text-align: center;
+            min-height: 40px;
+        }
+        #original-html-img {
+            max-width: 100%;
+            max-height: 180px;
+            border-radius: 6px;
+            display: none;
+        }
+        #preview-status { color: #888888; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -99,7 +97,10 @@
             📁 1. Cargar Imagen (PNG / JPG)
             <input type="file" id="image-input" accept="image/*" style="display: none;">
         </label>
-        <canvas id="original-preview-canvas"></canvas>
+        <div id="preview-wrapper">
+            <div id="preview-status">Ninguna imagen cargada aún</div>
+            <img id="original-html-img" alt="Vista previa de origen">
+        </div>
     </div>
 
     <div class="box" id="controls">
@@ -107,7 +108,7 @@
             <label for="processing-mode">Modo de Procesamiento:</label>
             <select id="processing-mode">
                 <option value="automatic">Capas Automáticas por Tonos</option>
-                <option value="manual">Ajuste Manual de Umbral (Silueta Única)</option>
+                <option value="manual">Ajuste Manual de Umbral</option>
             </select>
         </div>
 
@@ -125,18 +126,18 @@
             <label for="format-select">Formato de guardado final:</label>
             <select id="format-select">
                 <option value="image/png">PNG (Fondo Transparente)</option>
-                <option value="image/jpeg">JPG (Fondo Blanco Plano)</option>
+                <option value="image/jpeg">JPG (Fondo Blanco)</option>
             </select>
         </div>
 
         <div class="toggle-group">
             <span>Invertir Colores (Modo Negativo)</span>
-            <input type="checkbox" id="invert-toggle" class="checkbox-switch">
+            <input type="checkbox" id="invert-toggle">
         </div>
 
         <div class="toggle-group">
             <span>Extraer solo Contornos (Línea de Corte)</span>
-            <input type="checkbox" id="contour-toggle" class="checkbox-switch">
+            <input type="checkbox" id="contour-toggle">
         </div>
 
         <button class="btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
@@ -148,8 +149,8 @@
 
 <script>
     const imageInput = document.getElementById('image-input');
-    const originalCanvas = document.getElementById('original-preview-canvas');
-    const originalCtx = originalCanvas.getContext('2d');
+    const htmlImg = document.getElementById('original-html-img');
+    const previewStatus = document.getElementById('preview-status');
     const processingMode = document.getElementById('processing-mode');
     const autoControls = document.getElementById('auto-controls');
     const manualControls = document.getElementById('manual-controls');
@@ -165,19 +166,6 @@
     const formatSelect = document.getElementById('format-select');
 
     let imageLoaded = false;
-    let backupImg = new Image();
-
-    function initCanvas() {
-        originalCanvas.width = 400;
-        originalCanvas.height = 120;
-        originalCtx.fillStyle = "#2d2d2d";
-        originalCtx.fillRect(0, 0, 400, 120);
-        originalCtx.fillStyle = "#888888";
-        originalCtx.font = "14px Arial";
-        originalCtx.textAlign = "center";
-        originalCtx.fillText("Ninguna imagen cargada aún", 200, 65);
-    }
-    initCanvas();
 
     processingMode.addEventListener('change', () => {
         if (processingMode.value === 'automatic') {
@@ -192,29 +180,17 @@
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
     thresholdSlider.addEventListener('input', () => { thresholdVal.textContent = thresholdSlider.value; });
 
-    // LECTOR NATIVO SÍNCRONO REVISADO (Soluciona el bloqueo de carga de píxeles)
+    // ENLACE EXTRACTOR CORREGIDO MATEMÁTICAMENTE ([0] e indexación de archivos reales)
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             const reader = new FileReader();
             reader.onload = function(event) {
-                backupImg = new Image();
-                backupImg.onload = function() {
-                    const MAX_W = 600;
-                    let w = backupImg.width;
-                    let h = backupImg.height;
-                    if (w > MAX_W) {
-                        h = Math.round((h * MAX_W) / w);
-                        w = MAX_W;
-                    }
-                    originalCanvas.width = w;
-                    originalCanvas.height = h;
-                    
-                    originalCtx.fillStyle = "#ffffff";
-                    originalCtx.fillRect(0, 0, w, h);
-                    originalCtx.drawImage(backupImg, 0, 0, w, h);
+                htmlImg.src = event.target.result;
+                htmlImg.onload = function() {
+                    htmlImg.style.display = 'inline-block';
+                    previewStatus.style.display = 'none';
                     imageLoaded = true;
                 };
-                backupImg.src = event.target.result;
             };
             reader.readAsDataURL(this.files[0]);
         }
@@ -222,20 +198,61 @@
 
     resetBtn.addEventListener('click', () => {
         imageInput.value = '';
-        initCanvas();
+        htmlImg.src = '';
+        htmlImg.style.display = 'none';
+        previewStatus.style.display = 'block';
         layersContainer.innerHTML = '';
         invertToggle.checked = false;
         contourToggle.checked = false;
-        layersCount.value = 3;
-        layersVal.textContent = "3";
-        thresholdSlider.value = 128;
-        thresholdVal.textContent = "128";
-        processingMode.value = 'automatic';
-        autoControls.style.display = 'block';
-        manualControls.style.display = 'none';
         imageLoaded = false;
     });
 
     processBtn.addEventListener('click', () => {
         if (!imageLoaded) {
-            alert("Por favor, selecciona primero una imagen haciendo clic en el botón azul.");
+            alert("Por favor, selecciona primero una imagen.");
+            return;
+        }
+        
+        layersContainer.innerHTML = '';
+        const mode = processingMode.value;
+        const invert = invertToggle.checked;
+        const extractContours = contourToggle.checked;
+        const chosenFormat = formatSelect.value;
+        
+        const calcCanvas = document.createElement('canvas');
+        const calcCtx = calcCanvas.getContext('2d');
+        
+        const MAX_W = 600;
+        let w = htmlImg.naturalWidth;
+        let h = htmlImg.naturalHeight;
+        if (w > MAX_W) {
+            h = Math.round((h * MAX_W) / w);
+            w = MAX_W;
+        }
+        
+        calcCanvas.width = w;
+        calcCanvas.height = h;
+        calcCtx.fillStyle = "#ffffff";
+        calcCtx.fillRect(0, 0, w, h);
+        calcCtx.drawImage(htmlImg, 0, 0, w, h);
+        
+        const imgData = calcCtx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+
+        const processChannel = (mask, titleText) => {
+            const layerCanvas = document.createElement('canvas');
+            layerCanvas.width = w;
+            layerCanvas.height = h;
+            const layerCtx = layerCanvas.getContext('2d');
+            const layerImgData = layerCtx.createImageData(w, h);
+            const layerData = layerImgData.data;
+
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = y * w + x;
+                    const i = idx * 4;
+                    let isTarget = false;
+
+                    if (extractContours) {
+                        if (mask[idx] === 1) {
+                            const left = x > 0 ? mask[idx - 1] : 1;
