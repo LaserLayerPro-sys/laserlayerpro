@@ -51,6 +51,16 @@
             margin-bottom: 10px;
         }
         .toggle-group span { font-size: 14px; color: #eee; }
+        select {
+            width: 100%;
+            background-color: #252525;
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #393e46;
+            font-size: 14px;
+            outline: none;
+        }
         input[type="range"] { width: 100%; accent-color: #00adb5; background: #333; height: 6px; border-radius: 3px; }
         .layer-card {
             background: #1e1e1e;
@@ -66,7 +76,7 @@
             border-radius: 8px;
             margin: 10px 0;
         }
-        #original-preview-canvas { max-width: 100%; max-height: 180px; display: none; border-radius: 8px; margin-top: 15px; background: #2d2d2d; }
+        #original-preview-canvas { max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 15px; background: #2d2d2d; display: block; width: 100%; }
         .checkbox-apple { WebkitAppearance: none; width: 40px; height: 20px; background: #555; border-radius: 20px; position: relative; cursor: pointer; outline: none; }
         .checkbox-apple:checked { background: #00adb5; }
         .checkbox-apple:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 2px; left: 2px; background: #fff; }
@@ -81,18 +91,26 @@
 
     <div class="box">
         <label class="btn" style="width:auto; display:inline-block;">
-            📁 Cargar Imagen de Origen
-            <input type="file" id="image-input" accept="image/*">
+            📁 1. Cargar Imagen de Origen (PNG / JPG)
+            <input type="file" id="image-input" accept="image/*" style="display: none;">
         </label>
         <br>
-        <!-- Reemplazamos la etiqueta <img> por un <canvas> para obligar a Android a procesar la memoria directamente -->
         <canvas id="original-preview-canvas"></canvas>
     </div>
 
-    <div class="box" id="controls" style="display:none;">
+    <!-- Eliminamos el comando que ocultaba este menú, ahora saldrá siempre visible -->
+    <div class="box" id="controls">
         <div class="control-group">
             <label for="layers-count">Modo Capas Automáticas: <span id="layers-val">3</span> capas</label>
             <input type="range" id="layers-count" min="2" max="6" value="3">
+        </div>
+
+        <div class="control-group">
+            <label for="format-select">Formato de descarga final:</label>
+            <select id="format-select">
+                <option value="image/png">PNG (Fondo Transparente - Recomendado)</option>
+                <option value="image/jpeg">JPG (Fondo Blanco Plano)</option>
+            </select>
         </div>
 
         <div class="toggle-group">
@@ -105,7 +123,7 @@
             <input type="checkbox" id="contour-toggle" class="checkbox-apple">
         </div>
 
-        <button class="btn btn-secondary" id="process-btn">⚙️ Procesar y Separar</button>
+        <button class="btn btn-secondary" id="process-btn">⚙️ 2. Procesar y Separar</button>
         <button class="btn btn-danger" id="reset-btn">🗑️ Limpiar Todo</button>
     </div>
 
@@ -116,7 +134,6 @@
     const imageInput = document.getElementById('image-input');
     const originalCanvas = document.getElementById('original-preview-canvas');
     const originalCtx = originalCanvas.getContext('2d');
-    const controls = document.getElementById('controls');
     const layersCount = document.getElementById('layers-count');
     const layersVal = document.getElementById('layers-val');
     const processBtn = document.getElementById('process-btn');
@@ -124,36 +141,47 @@
     const layersContainer = document.getElementById('layers-container');
     const invertToggle = document.getElementById('invert-toggle');
     const contourToggle = document.getElementById('contour-toggle');
+    const formatSelect = document.getElementById('format-select');
 
     let imageLoaded = false;
+    let backupImg = new Image();
+
+    // Inicializar el cuadro de previsualización vacío con un fondo gris técnico
+    originalCanvas.width = 400;
+    originalCanvas.height = 150;
+    originalCtx.fillStyle = "#2d2d2d";
+    originalCtx.fillRect(0, 0, 400, 150);
+    originalCtx.fillStyle = "#888888";
+    originalCtx.font = "14px Arial";
+    originalCtx.textAlign = "center";
+    originalCtx.fillText("Ninguna imagen cargada aún", 200, 80);
 
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
 
     imageInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (file) {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
             const reader = new FileReader();
+            
             reader.onload = function(event) {
-                const img = new Image();
-                img.onload = function() {
-                    // Forzar el redimensionamiento en memoria para romper las restricciones de protección de rutas de Android WebView
-                    const MAX_W = 800;
-                    let w = img.width;
-                    let h = img.height;
+                backupImg = new Image();
+                backupImg.onload = function() {
+                    const MAX_W = 600;
+                    let w = backupImg.width;
+                    let h = backupImg.height;
                     if (w > MAX_W) {
                         h = Math.round((h * MAX_W) / w);
                         w = MAX_W;
                     }
                     originalCanvas.width = w;
                     originalCanvas.height = h;
-                    originalCtx.drawImage(img, 0, 0, w, h);
                     
-                    originalCanvas.style.display = 'inline-block';
-                    controls.style.display = 'block';
-                    layersContainer.innerHTML = '';
+                    originalCtx.fillStyle = "#ffffff";
+                    originalCtx.fillRect(0, 0, w, h);
+                    originalCtx.drawImage(backupImg, 0, 0, w, h);
                     imageLoaded = true;
                 };
-                img.src = event.target.result;
+                backupImg.src = event.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -161,8 +189,12 @@
 
     resetBtn.addEventListener('click', () => {
         imageInput.value = '';
-        originalCanvas.style.display = 'none';
-        controls.style.display = 'none';
+        originalCanvas.width = 400;
+        originalCanvas.height = 150;
+        originalCtx.fillStyle = "#2d2d2d";
+        originalCtx.fillRect(0, 0, 400, 150);
+        originalCtx.fillStyle = "#888888";
+        originalCtx.fillText("Ninguna imagen cargada aún", 200, 80);
         layersContainer.innerHTML = '';
         invertToggle.checked = false;
         contourToggle.checked = false;
@@ -170,12 +202,16 @@
     });
 
     processBtn.addEventListener('click', () => {
-        if (!imageLoaded) return;
+        if (!imageLoaded) {
+            alert("Por favor, selecciona primero una imagen válida haciendo clic en el botón azul.");
+            return;
+        }
         
         layersContainer.innerHTML = '';
         const numLayers = parseInt(layersCount.value);
         const invert = invertToggle.checked;
         const extractContours = contourToggle.checked;
+        const chosenFormat = formatSelect.value;
         
         const width = originalCanvas.width;
         const height = originalCanvas.height;
@@ -198,8 +234,14 @@
 
             for (let i = 0; i < data.length; i += 4) {
                 const idx = i / 4;
-                if (data[i+3] < 10) continue; // Transparente
-                const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                const alpha = data[i+3];
+                
+                let r = data[i];
+                let g = data[i+1];
+                let b = data[i+2];
+                if (alpha < 10) { r = 255; g = 255; b = 255; }
+
+                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
                 if (gray >= minGray && gray < maxGray) {
                     mask[idx] = 1;
                 }
@@ -209,37 +251,3 @@
                 for (let x = 0; x < width; x++) {
                     const idx = y * width + x;
                     const i = idx * 4;
-                    let isTarget = false;
-
-                    if (extractContours) {
-                        if (mask[idx] === 1) {
-                            const left = x > 0 ? mask[idx - 1] : 1;
-                            const right = x < width - 1 ? mask[idx + 1] : 1;
-                            const up = y > 0 ? mask[idx - width] : 1;
-                            const down = y < height - 1 ? mask[idx + width] : 1;
-                            if (left === 0 || right === 0 || up === 0 || down === 0) {
-                                isTarget = true;
-                            }
-                        }
-                    } else {
-                        if (mask[idx] === 1) isTarget = true;
-                    }
-
-                    if (isTarget) {
-                        const colorValue = invert ? 255 : 0;
-                        layerData[i] = colorValue;
-                        layerData[i+1] = colorValue;
-                        layerData[i+2] = colorValue;
-                        layerData[i+3] = 255;
-                    } else {
-                        layerData[i+3] = 0;
-                    }
-                }
-            }
-
-            layerCtx.putImageData(layerImgData, 0, 0);
-
-            const card = document.createElement('div');
-            card.className = 'layer-card';
-            card.innerHTML = `<h3>Capa ${l + 1} de ${numLayers}</h3>`;
-            
