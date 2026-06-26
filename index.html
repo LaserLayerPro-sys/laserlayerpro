@@ -95,6 +95,18 @@
             display: none;
         }
         #preview-status { color: #888888; font-size: 14px; }
+        .download-btn {
+            background-color: #00adb5;
+            color: #121212;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            display: block;
+            text-decoration: none;
+            font-size: 14px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -114,7 +126,7 @@
         </div>
     </div>
 
-    <div class="box" id="controls">
+    <div class="box" id="controls" style="display: none;">
         <div class="control-group">
             <label for="processing-mode">Modo de Procesamiento:</label>
             <select id="processing-mode">
@@ -175,6 +187,7 @@
     const invertToggle = document.getElementById('invert-toggle');
     const contourToggle = document.getElementById('contour-toggle');
     const formatSelect = document.getElementById('format-select');
+    const controls = document.getElementById('controls');
 
     let imageLoaded = false;
 
@@ -191,19 +204,44 @@
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
     thresholdSlider.addEventListener('input', () => { thresholdVal.textContent = thresholdSlider.value; });
 
-    // PROCESAMIENTO REPARADO MEDIANTE ADYACENCIA SÍNCRONA
+    // CARGA DE IMAGEN CORREGIDA CON MANEJO DE ERRORES
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
+            const file = this.files[0];
+            
+            // Validar que sea una imagen
+            if (!file.type.startsWith('image/')) {
+                alert('Por favor selecciona un archivo de imagen válido.');
+                return;
+            }
+            
             const reader = new FileReader();
+            
             reader.onload = function(event) {
                 htmlImg.src = event.target.result;
+                
                 htmlImg.onload = function() {
                     htmlImg.style.display = 'inline-block';
                     previewStatus.style.display = 'none';
+                    controls.style.display = 'block';
                     imageLoaded = true;
+                    console.log('✅ Imagen cargada correctamente:', htmlImg.naturalWidth, 'x', htmlImg.naturalHeight);
+                };
+                
+                htmlImg.onerror = function() {
+                    alert('Error al cargar la imagen. Intenta con otro archivo.');
+                    previewStatus.textContent = 'Error al cargar imagen';
+                    previewStatus.style.display = 'block';
                 };
             };
-            reader.readAsDataURL(this.files[0]);
+            
+            reader.onerror = function() {
+                alert('Error al leer el archivo. Intenta de nuevo.');
+                previewStatus.textContent = 'Error de lectura';
+                previewStatus.style.display = 'block';
+            };
+            
+            reader.readAsDataURL(file);
         }
     });
 
@@ -211,7 +249,9 @@
         imageInput.value = '';
         htmlImg.src = '';
         htmlImg.style.display = 'none';
+        previewStatus.textContent = 'Ninguna imagen cargada aún';
         previewStatus.style.display = 'block';
+        controls.style.display = 'none';
         layersContainer.innerHTML = '';
         invertToggle.checked = false;
         contourToggle.checked = false;
@@ -250,7 +290,76 @@
         const imgData = calcCtx.getImageData(0, 0, w, h);
         const data = imgData.data;
 
-        const processChannel = (mask, titleText) => {
+        if (mode === 'automatic') {
+            // MODO AUTOMÁTICO - MÚLTIPLES CAPAS
+            const numLayers = parseInt(layersCount.value);
+            const step = 255 / numLayers;
+
+            for (let l = 0; l < numLayers; l++) {
+                const minGray = l * step;
+                const maxGray = (l + 1) * step;
+                
+                const layerCanvas = document.createElement('canvas');
+                layerCanvas.width = w;
+                layerCanvas.height = h;
+                const layerCtx = layerCanvas.getContext('2d');
+                const layerImgData = layerCtx.createImageData(w, h);
+                const layerData = layerImgData.data;
+
+                // Crear máscara de píxeles en este rango
+                const mask = new Uint8Array(w * h);
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    const idx = i / 4;
+                    let gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                    
+                    if (invert) gray = 255 - gray;
+                    
+                    if (gray >= minGray && gray < maxGray) {
+                        mask[idx] = 1;
+                    }
+                }
+
+                // Aplicar máscara (con o sin contornos)
+                for (let y = 0; y < h; y++) {
+                    for (let x = 0; x < w; x++) {
+                        const idx = y * w + x;
+                        const i = idx * 4;
+                        
+                        let isTarget = false;
+                        
+                        if (extractContours) {
+                            // Detectar bordes
+                            if (mask[idx] === 1) {
+                                const left = x > 0 ? mask[idx - 1] : 0;
+                                const right = x < w - 1 ? mask[idx + 1] : 0;
+                                const up = y > 0 ? mask[idx - w] : 0;
+                                const down = y < h - 1 ? mask[idx + w] : 0;
+                                
+                                if (left === 0 || right === 0 || up === 0 || down === 0) {
+                                    isTarget = true;
+                                }
+                            }
+                        } else {
+                            isTarget = mask[idx] === 1;
+                        }
+                        
+                        if (isTarget) {
+                            layerData[i] = 0;     // R
+                            layerData[i+1] = 0;   // G
+                            layerData[i+2] = 0;   // B
+                            layerData[i+3] = 255; // A
+                        }
+                    }
+                }
+                
+                layerCtx.putImageData(layerImgData, 0, 0);
+                createLayerCard(layerCanvas, `Capa ${l + 1} (${Math.round(minGray)}-${Math.round(maxGray)})`, chosenFormat);
+            }
+        } else {
+            // MODO MANUAL - UN SOLO UMBRAL
+            const threshold = parseInt(thresholdSlider.value);
+            
             const layerCanvas = document.createElement('canvas');
             layerCanvas.width = w;
             layerCanvas.height = h;
@@ -258,4 +367,75 @@
             const layerImgData = layerCtx.createImageData(w, h);
             const layerData = layerImgData.data;
 
+            const mask = new Uint8Array(w * h);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                const idx = i / 4;
+                let gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
+                
+                if (invert) gray = 255 - gray;
+                
+                if (gray < threshold) {
+                    mask[idx] = 1;
+                }
+            }
+
             for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = y * w + x;
+                    const i = idx * 4;
+                    
+                    let isTarget = false;
+                    
+                    if (extractContours) {
+                        if (mask[idx] === 1) {
+                            const left = x > 0 ? mask[idx - 1] : 0;
+                            const right = x < w - 1 ? mask[idx + 1] : 0;
+                            const up = y > 0 ? mask[idx - w] : 0;
+                            const down = y < h - 1 ? mask[idx + w] : 0;
+                            
+                            if (left === 0 || right === 0 || up === 0 || down === 0) {
+                                isTarget = true;
+                            }
+                        }
+                    } else {
+                        isTarget = mask[idx] === 1;
+                    }
+                    
+                    if (isTarget) {
+                        layerData[i] = 0;
+                        layerData[i+1] = 0;
+                        layerData[i+2] = 0;
+                        layerData[i+3] = 255;
+                    }
+                }
+            }
+            
+            layerCtx.putImageData(layerImgData, 0, 0);
+            createLayerCard(layerCanvas, `Umbral ${threshold}`, chosenFormat);
+        }
+    });
+
+    function createLayerCard(canvas, title, format) {
+        const card = document.createElement('div');
+        card.className = 'layer-card';
+        
+        const h3 = document.createElement('h3');
+        h3.textContent = title;
+        card.appendChild(h3);
+        
+        card.appendChild(canvas);
+        
+        const downloadLink = document.createElement('a');
+        downloadLink.className = 'download-btn';
+        downloadLink.textContent = '⬇️ Descargar Capa';
+        downloadLink.download = `layer_${title.replace(/\s+/g, '_')}.${format === 'image/png' ? 'png' : 'jpg'}`;
+        downloadLink.href = canvas.toDataURL(format, 0.95);
+        card.appendChild(downloadLink);
+        
+        layersContainer.appendChild(card);
+    }
+</script>
+
+</body>
+</html>
