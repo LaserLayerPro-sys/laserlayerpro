@@ -24,7 +24,6 @@
             margin-bottom: 15px;
             border: 1px solid #2d2d2d;
         }
-        input[type="file"] { display: none; }
         .btn {
             background-color: #00adb5;
             color: white;
@@ -37,23 +36,10 @@
             width: 100%;
             box-sizing: border-box;
             font-size: 15px;
-            transition: background 0.2s;
         }
-        .btn:hover { background-color: #008c95; }
-        .btn-secondary {
-            background-color: #222831;
-            border: 1px solid #393e46;
-            margin-top: 10px;
-        }
-        .btn-danger {
-            background-color: #cf6679;
-            color: #121212;
-            margin-top: 10px;
-        }
-        .control-group {
-            margin: 18px 0;
-            text-align: left;
-        }
+        .btn-secondary { background-color: #222831; border: 1px solid #393e46; margin-top: 10px; }
+        .btn-danger { background-color: #cf6679; color: #121212; margin-top: 10px; }
+        .control-group { margin: 18px 0; text-align: left; }
         label { display: block; font-size: 14px; color: #00adb5; margin-bottom: 8px; font-weight: 600; }
         .toggle-group {
             display: flex;
@@ -72,32 +58,18 @@
             border-radius: 14px;
             padding: 15px;
             margin-top: 20px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
-        .layer-card h3 { font-size: 16px; margin: 0 0 10px 0; color: #eeeeee; }
         .layer-card canvas {
             max-width: 100%;
             height: auto;
             background: #2d2d2d;
             border-radius: 8px;
             margin: 10px 0;
-            border: 1px dashed #444;
         }
-        .download-btn {
-            background-color: #00adb5;
-            color: #121212;
-            padding: 10px 15px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            display: block;
-            text-decoration: none;
-            font-size: 14px;
-        }
-        #original-preview { max-width: 100%; max-height: 180px; display: none; border-radius: 8px; margin-top: 15px; }
-        .checkbox-apple { WebkitAppearance: none; width: 40px; height: 20px; background: #555; border-radius: 20px; position: relative; cursor: pointer; outline: none; transition: background 0.3s; }
+        #original-preview-canvas { max-width: 100%; max-height: 180px; display: none; border-radius: 8px; margin-top: 15px; background: #2d2d2d; }
+        .checkbox-apple { WebkitAppearance: none; width: 40px; height: 20px; background: #555; border-radius: 20px; position: relative; cursor: pointer; outline: none; }
         .checkbox-apple:checked { background: #00adb5; }
-        .checkbox-apple:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 2px; left: 2px; background: #fff; transition: left 0.3s; }
+        .checkbox-apple:before { content: ''; position: absolute; width: 16px; height: 16px; border-radius: 50%; top: 2px; left: 2px; background: #fff; }
         .checkbox-apple:checked:before { left: 22px; }
     </style>
 </head>
@@ -113,7 +85,8 @@
             <input type="file" id="image-input" accept="image/*">
         </label>
         <br>
-        <img id="original-preview" alt="Vista previa original">
+        <!-- Reemplazamos la etiqueta <img> por un <canvas> para obligar a Android a procesar la memoria directamente -->
+        <canvas id="original-preview-canvas"></canvas>
     </div>
 
     <div class="box" id="controls" style="display:none;">
@@ -141,7 +114,8 @@
 
 <script>
     const imageInput = document.getElementById('image-input');
-    const originalPreview = document.getElementById('original-preview');
+    const originalCanvas = document.getElementById('original-preview-canvas');
+    const originalCtx = originalCanvas.getContext('2d');
     const controls = document.getElementById('controls');
     const layersCount = document.getElementById('layers-count');
     const layersVal = document.getElementById('layers-val');
@@ -151,7 +125,7 @@
     const invertToggle = document.getElementById('invert-toggle');
     const contourToggle = document.getElementById('contour-toggle');
 
-    let originalImage = new Image();
+    let imageLoaded = false;
 
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
 
@@ -159,18 +133,27 @@
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
-            reader.onload = (event) => {
-                // Forzamos el modo anónimo para evitar bloqueos CORS locales en Android
-                originalImage = new Image();
-                originalImage.crossOrigin = "anonymous";
-                originalImage.src = event.target.result;
-                
-                originalImage.onload = () => {
-                    originalPreview.src = originalImage.src;
-                    originalPreview.style.display = 'inline-block';
+            reader.onload = function(event) {
+                const img = new Image();
+                img.onload = function() {
+                    // Forzar el redimensionamiento en memoria para romper las restricciones de protección de rutas de Android WebView
+                    const MAX_W = 800;
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > MAX_W) {
+                        h = Math.round((h * MAX_W) / w);
+                        w = MAX_W;
+                    }
+                    originalCanvas.width = w;
+                    originalCanvas.height = h;
+                    originalCtx.drawImage(img, 0, 0, w, h);
+                    
+                    originalCanvas.style.display = 'inline-block';
                     controls.style.display = 'block';
                     layersContainer.innerHTML = '';
+                    imageLoaded = true;
                 };
+                img.src = event.target.result;
             };
             reader.readAsDataURL(file);
         }
@@ -178,48 +161,26 @@
 
     resetBtn.addEventListener('click', () => {
         imageInput.value = '';
-        originalPreview.style.display = 'none';
-        originalPreview.src = '';
+        originalCanvas.style.display = 'none';
         controls.style.display = 'none';
         layersContainer.innerHTML = '';
-        originalImage = new Image();
         invertToggle.checked = false;
         contourToggle.checked = false;
+        imageLoaded = false;
     });
 
     processBtn.addEventListener('click', () => {
-        if (!originalImage.src) return;
+        if (!imageLoaded) return;
         
         layersContainer.innerHTML = '';
         const numLayers = parseInt(layersCount.value);
         const invert = invertToggle.checked;
         const extractContours = contourToggle.checked;
         
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
+        const width = originalCanvas.width;
+        const height = originalCanvas.height;
         
-        // Ajuste automático de resolución óptima para evitar colapsos de memoria en Webview
-        const MAX_WIDTH = 1000;
-        let width = originalImage.width;
-        let height = originalImage.height;
-        
-        if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        ctx.drawImage(originalImage, 0, 0, width, height);
-        
-        let imgData;
-        try {
-            imgData = ctx.getImageData(0, 0, width, height);
-        } catch (e) {
-            alert("Error de seguridad al leer la imagen. Intenta con otra o reinicia la app.");
-            return;
-        }
-        
+        const imgData = originalCtx.getImageData(0, 0, width, height);
         const data = imgData.data;
         const step = 255 / numLayers;
 
@@ -233,16 +194,12 @@
 
             const minGray = l * step;
             const maxGray = (l + 1) * step;
-
             const mask = new Uint8Array(width * height);
 
             for (let i = 0; i < data.length; i += 4) {
                 const idx = i / 4;
-                const a = data[i+3];
-                if (a < 10) continue;
-
+                if (data[i+3] < 10) continue; // Transparente
                 const gray = 0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2];
-
                 if (gray >= minGray && gray < maxGray) {
                     mask[idx] = 1;
                 }
@@ -252,7 +209,6 @@
                 for (let x = 0; x < width; x++) {
                     const idx = y * width + x;
                     const i = idx * 4;
-
                     let isTarget = false;
 
                     if (extractContours) {
@@ -261,4 +217,29 @@
                             const right = x < width - 1 ? mask[idx + 1] : 1;
                             const up = y > 0 ? mask[idx - width] : 1;
                             const down = y < height - 1 ? mask[idx + width] : 1;
+                            if (left === 0 || right === 0 || up === 0 || down === 0) {
+                                isTarget = true;
+                            }
+                        }
+                    } else {
+                        if (mask[idx] === 1) isTarget = true;
+                    }
 
+                    if (isTarget) {
+                        const colorValue = invert ? 255 : 0;
+                        layerData[i] = colorValue;
+                        layerData[i+1] = colorValue;
+                        layerData[i+2] = colorValue;
+                        layerData[i+3] = 255;
+                    } else {
+                        layerData[i+3] = 0;
+                    }
+                }
+            }
+
+            layerCtx.putImageData(layerImgData, 0, 0);
+
+            const card = document.createElement('div');
+            card.className = 'layer-card';
+            card.innerHTML = `<h3>Capa ${l + 1} de ${numLayers}</h3>`;
+            
