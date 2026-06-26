@@ -191,7 +191,7 @@
     layersCount.addEventListener('input', () => { layersVal.textContent = layersCount.value; });
     thresholdSlider.addEventListener('input', () => { thresholdVal.textContent = thresholdSlider.value; });
 
-    // EL CAMBIO CLAVE: Lector síncrono nativo reparado apuntando al archivo [0]
+    // PROCESAMIENTO REPARADO MEDIANTE ADYACENCIA SÍNCRONA
     imageInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             const reader = new FileReader();
